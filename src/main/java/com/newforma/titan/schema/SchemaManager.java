@@ -63,6 +63,7 @@ import org.janusgraph.diskstorage.BackendException;
 import org.janusgraph.graphdb.database.StandardJanusGraph;
 import org.janusgraph.graphdb.database.management.GraphIndexStatusReport;
 import org.janusgraph.graphdb.database.management.ManagementSystem;
+import org.janusgraph.graphdb.database.management.RelationIndexStatusReport;
 import org.janusgraph.graphdb.types.StandardRelationTypeMaker;
 import org.janusgraph.hadoop.MapReduceIndexManagement;
 
@@ -878,18 +879,23 @@ public class SchemaManager {
 
 			try {
 				LOG.info("Waiting for the index {} to become available...", indexName);
-				ManagementSystem.awaitGraphIndexStatus(graph, indexName)
+				final GraphIndexStatusReport indexStatusReport = ManagementSystem.awaitGraphIndexStatus(graph, indexName)
 						.status(SchemaStatus.REGISTERED)
 						.timeout(this.reindexTimeoutInSecs, ChronoUnit.SECONDS)
 						.call();
 
-				LOG.info("Enabling index {}...", indexName);
-				final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
-				mgmtIndexEnabler.updateIndex(mgmtIndexEnabler.getGraphIndex(indexName), SchemaAction.ENABLE_INDEX).get();
-				mgmtIndexEnabler.commit();
-				LOG.info("Index {} is enabled, existing data may need to be reindexed", indexName);
+				if (indexStatusReport.getSucceeded()) {
+    				LOG.info("Enabling index {}...", indexName);
+    				final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
+    				mgmtIndexEnabler.updateIndex(mgmtIndexEnabler.getGraphIndex(indexName), SchemaAction.ENABLE_INDEX).get();
+    				mgmtIndexEnabler.commit();
+    				LOG.info("Index {} is enabled, existing data may need to be reindexed", indexName);
 
-				graphState.addIndex(indexName, true);
+    				graphState.addIndex(indexName, true);
+			    } else {
+			        throw new SchemaManagementException("Unable to register new index \"" + indexName + "\" after " +
+			                indexStatusReport.getElapsed().getSeconds() + "s");
+			    }
 			} catch (InterruptedException e) {
 				throw new SchemaManagementException("Unable to get status for index \"" + indexName + "\"", e);
 			} catch (ExecutionException e) {
@@ -926,18 +932,25 @@ public class SchemaManager {
 
 			try {
 				LOG.info("Waiting for the local property index {} to become available...", indexName);
-				ManagementSystem.awaitRelationIndexStatus(graph, indexName, localPropIndexDef.getKey())
+				final RelationIndexStatusReport indexStatusReport = ManagementSystem.awaitRelationIndexStatus(graph, indexName, localPropIndexDef.getKey())
 						.status(SchemaStatus.REGISTERED)
 						.timeout(this.reindexTimeoutInSecs, ChronoUnit.SECONDS)
 						.call();
 
-				LOG.info("Enabling local property index {}...", indexName);
-				final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
-				mgmtIndexEnabler.updateIndex(mgmtIndexEnabler.getRelationIndex(pk, indexName), SchemaAction.ENABLE_INDEX).get();
-				mgmtIndexEnabler.commit();
-				LOG.info("Local property index {} is enabled, existing data may need to be reindexed", indexName);
+                if (indexStatusReport.getSucceeded()) {
+                    LOG.info("Enabling local property index {}...", indexName);
+                    final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
+                    mgmtIndexEnabler
+                            .updateIndex(mgmtIndexEnabler.getRelationIndex(pk, indexName), SchemaAction.ENABLE_INDEX)
+                            .get();
+                    mgmtIndexEnabler.commit();
+                    LOG.info("Local property index {} is enabled, existing data may need to be reindexed", indexName);
 
-				graphState.addIndex(indexName, true);
+                    graphState.addIndex(indexName, true);
+                } else {
+                    throw new SchemaManagementException("Unable to register new local property index \"" + indexName
+                            + "\" after " + indexStatusReport.getElapsed().getSeconds() + "s");
+                }
 			} catch (InterruptedException e) {
 				throw new SchemaManagementException("Unable to get status for index \"" + indexName + "\"", e);
 			} catch (ExecutionException e) {
@@ -975,18 +988,23 @@ public class SchemaManager {
 
 			try {
 				LOG.info("Waiting for the local edge index {} to become available...", indexName);
-				ManagementSystem.awaitRelationIndexStatus(graph, indexName, localEdgeIndexDef.getLabel())
+				final RelationIndexStatusReport indexStatusReport = ManagementSystem.awaitRelationIndexStatus(graph, indexName, localEdgeIndexDef.getLabel())
 						.status(SchemaStatus.REGISTERED)
 						.timeout(this.reindexTimeoutInSecs, ChronoUnit.SECONDS)
 						.call();
 
-				LOG.info("Enabling local edge index {}...", indexName);
-				final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
-				mgmtIndexEnabler.updateIndex(mgmtIndexEnabler.getRelationIndex(el, indexName), SchemaAction.ENABLE_INDEX).get();
-				mgmtIndexEnabler.commit();
-				LOG.info("Local edge index {} is enabled, existing data may need to be reindexed", indexName);
+                if (indexStatusReport.getSucceeded()) {
+                	LOG.info("Enabling local edge index {}...", indexName);
+                	final JanusGraphManagement mgmtIndexEnabler = graph.openManagement();
+                	mgmtIndexEnabler.updateIndex(mgmtIndexEnabler.getRelationIndex(el, indexName), SchemaAction.ENABLE_INDEX).get();
+                	mgmtIndexEnabler.commit();
+                	LOG.info("Local edge index {} is enabled, existing data may need to be reindexed", indexName);
 
-				graphState.addIndex(indexName, true);
+                	graphState.addIndex(indexName, true);
+                } else {
+                    throw new SchemaManagementException("Unable to register new local edge index \"" + indexName + "\" after " +
+                            indexStatusReport.getElapsed().getSeconds() + "s");
+                }
 			} catch (InterruptedException e) {
 				throw new SchemaManagementException("Unable to get status for index \"" + indexName + "\"", e);
 			} catch (ExecutionException e) {
